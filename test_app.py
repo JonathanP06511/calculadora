@@ -9,32 +9,33 @@ def client():
         yield client
 
 def test_index(client):
-    """R001 Prueba para verificar la página principal ('/')."""
+    """PU-01 Verifica que la página principal es accesible"""
     rv = client.get('/')
     assert rv.status_code == 200
     assert b'<title>Calculadora</title>' in rv.data
 
 def test_calculate_success(client):
-    """R002 Prueba para verificar el cálculo exitoso."""
+    """PU-02 Verifica que la aplicación realiza la suma 2 + 2 correctamente.."""
     rv = client.post('/calculate', data={'expression': '2+2'})
     assert rv.status_code == 200
     assert b'"result": "4"' in rv.data
 
 
 def test_calculate_division_by_zero(client):
-    """R003 Prueba para verificar el manejo de división por cero."""
+    """PU-03 Verifica que la aplicación muestra un error al intentar dividir por cero.."""
     rv = client.post('/calculate', data={'expression': '1/0'})
     assert rv.status_code == 200
     assert b'Error' in rv.data
 
 def test_calculate_invalid_expression(client):
-    """R004 Prueba para verificar el manejo de expresiones inválidas."""
+    """PU-04 Verifica que la aplicación muestra un error al ingresar una expresión incompleta."""
     rv = client.post('/calculate', data={'expression': '1 + '})  # Expresión incompleta
     assert rv.status_code == 200
     assert b'Error' in rv.data
 
 def test_calculate_no_expression(client):
-    """R005 Prueba para verificar el manejo cuando no se proporciona una expresión."""
+    """PU-05 Verificar el manejo cuando no se proporciona una expresión."""
     rv = client.post('/calculate')
     assert rv.status_code == 200
     assert b'Error' in rv.data
+
