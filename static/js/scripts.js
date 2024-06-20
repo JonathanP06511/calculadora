@@ -1,84 +1,105 @@
-document.addEventListener('DOMContentLoaded', (event) => {
-    const display = document.getElementById('display');
+// calculator.test.js
+const { JSDOM } = require('jsdom');
+global.fetch = require('jest-fetch-mock');
 
-    window.appendCharacter = function(character) {
-        const currentValue = display.value;
-        if (currentValue.length >= 20) {
-            return;  // No agregar más caracteres si la longitud de la expresión es 20 o más
-        }
+describe('Funcionalidad de la calculadora', () => {
+  let document;
+  let window;
+  let display;
 
-        const lastOperand = currentValue.split(/[+\-*/]/).pop();
+  beforeEach(() => {
+    const dom = new JSDOM(`
+      <html>
+        <body>
+          <input type="text" id="display" value="">
+          <script>
+            // Funciones simuladas de la calculadora
+            window.appendCharacter = function(character) {
+              const currentValue = display.value;
 
-        // Verificar si el carácter es un dígito, un punto decimal, una operación matemática, o un paréntesis
-        if (/\d/.test(character) || (character === '.' && lastOperand.indexOf('.') === -1) || /[+\-*/()]/.test(character)) {
-            const integerDigits = lastOperand.split('.')[0].length;
-            const decimalDigits = lastOperand.split('.')[1] ? lastOperand.split('.')[1].length : 0;
+              // Limitar la cantidad de dígitos enteros a 9 y decimales a 5
+              const integerDigits = currentValue.split('.')[0].length;
+              const decimalDigits = currentValue.split('.')[1] ? currentValue.split('.')[1].length : 0;
 
-            if (/[+\-*/()]/.test(character)) {
-                // Si el carácter es una operación matemática o un paréntesis
-                if (character === '(') {
-                    // Permitir el paréntesis de apertura siempre
-                    display.value += character;
-                } else if (character === ')') {
-                    // Permitir el paréntesis de cierre si ya hay un paréntesis de apertura sin cerrar
-                    const openParens = (currentValue.match(/\(/g) || []).length;
-                    const closeParens = (currentValue.match(/\)/g) || []).length;
-                    if (openParens > closeParens && !/[+\-*/]$/.test(currentValue)) {
-                        display.value += character;
-                    }
-                } else if (character === '-' && (currentValue === '' || /[+\-*/(]$/.test(currentValue))) {
-                    // Permitir el signo negativo si es el primer carácter o después de un operador o un paréntesis de apertura
-                    display.value += character;
-                } else if (!/[+\-*/]$/.test(currentValue) && currentValue !== '') {
-                    // Permitir operaciones matemáticas si no es el último carácter y el valor actual no está vacío
-                    display.value += character;
-                }
-            } else if (lastOperand.includes('.')) {
-                // Si ya hay un punto decimal en el último operando, verificar los dígitos decimales
-                if (decimalDigits < 5) {
-                    display.value += character;
-                }
-            } else {
-                // Si no hay punto decimal en el último operando, verificar los dígitos enteros
-                if (integerDigits < 9 || (integerDigits < 10 && character === '.')) {
-                    display.value += character;
-                }
-            }
-        }
-    };
+              if (
+                (/\d/.test(character) && integerDigits < 9) ||  // Permitir dígitos si no se alcanzó el límite de enteros
+                (character === '.' && decimalDigits < 5) ||     // Permitir punto decimal si no se alcanzó el límite de decimales
+                /[+\-*/]/.test(character)                       // Permitir operadores siempre
+              ) {
+                display.value += character;
+              }
+            };
 
-    window.clearDisplay = function() {
-        display.value = '';
-    };
+            window.clearDisplay = function() {
+              display.value = '';
+            };
 
-    window.backspace = function() {
-        display.value = display.value.slice(0, -1);
-    };
+            window.backspace = function() {
+              display.value = display.value.slice(0, -1);
+            };
 
-    window.calculateResult = function() {
-        const expression = display.value;
-        fetch('/calculate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `expression=${encodeURIComponent(expression)}`,
-        })
-        .then(response => response.json())
-        .then(data => {
-            // Redondear el resultado a 10 dígitos
-            let result = parseFloat(data.result);
-            if (!isNaN(result)) {
-                if (result.toString().length > 10) {
-                    result = result.toPrecision(10);
-                }
-                display.value = result;
-            } else {
+            window.calculateResult = async function() {
+              const response = await fetch('/calculate', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: \`expression=\${encodeURIComponent(display.value)}\`,
+              });
+              const data = await response.json();
+              if (data.result === 'Infinity') {
                 display.value = 'Error';
-            }
-        })
-        .catch(error => {
-            display.value = 'Error';
-        });
-    };
+              } else {
+                display.value = data.result;
+              }
+            };
+          </script>
+        </body>
+      </html>
+    `, { runScripts: 'dangerously' });
+
+    window = dom.window;
+    document = window.document;
+    display = document.getElementById('display');
+  });
+
+  test('debería limitar dígitos enteros a 9 y decimales a 5', () => {
+    // Prueba agregar dígitos
+    display.value = '123456789';  // 9 dígitos enteros
+    window.appendCharacter('1');  // Intentar agregar otro dígito
+    expect(display.value).toBe('123456789');  // No debería cambiar
+
+    // Prueba agregar punto decimal y dígitos después
+    display.value = '123.45678';  // 3 dígitos enteros, 5 decimales
+    window.appendCharacter('9');  // Intentar agregar otro dígito decimal
+    expect(display.value).toBe('123.45678');  // No debería cambiar
+
+    // Prueba agregar otro dígito después de 9 enteros
+    display.value = '123456789';  // 9 dígitos enteros
+    window.appendCharacter('0');
+    expect(display.value).toBe('123456789');  // No debería cambiar
+
+    // Prueba agregar más de 5 decimales
+    display.value = '123.456';  // 3 dígitos enteros, 3 decimales
+    window.appendCharacter('78901');
+    expect(display.value).toBe('123.45678');  // Debería agregar solo hasta 5 decimales
+  });
+
+  test('debería manejar números decimales correctamente', () => {
+    // Prueba agregar número decimal dentro de los límites
+    display.value = '123';  // Comienza con un entero
+    window.appendCharacter('.');
+    window.appendCharacter('4');
+    window.appendCharacter('5');
+    window.appendCharacter('6');
+    window.appendCharacter('7');
+    window.appendCharacter('8');
+    expect(display.value).toBe('123.45678');  // Debería agregar hasta 5 decimales
+
+    // Prueba agregar más de 5 decimales después de un punto
+    display.value = '123.456';  // 3 dígitos enteros, 3 decimales
+    window.appendCharacter('78901');
+    expect(display.value).toBe('123.45678');  // Debería agregar solo hasta 5 decimales
+  });
+
 });

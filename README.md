@@ -1,4 +1,3 @@
-# Nombre del Proyecto
 
 ![Logo del Proyecto](img/foto.png)
 
